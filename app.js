@@ -1,3 +1,4 @@
+//require dotenv as soon as possible
 require('dotenv').config()
 
 const express = require('express');
