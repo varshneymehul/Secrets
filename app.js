@@ -6,7 +6,7 @@ const bodyParser = require('body-parser');
 const mongoose = require('mongoose')
 const app = express();
 const _ = require('lodash')
-const bcrypt = require('brcypt')
+const bcrypt = require('bcrypt')
 
 // brcrypt configuration
 const saltRounds = 10;
@@ -72,13 +72,17 @@ app.post("/register", function (req, res) {
 
 app.post("/login", function(req,res){
   const username = req.body.username;
-  const password = md5(req.body.password);
+  const password = req.body.password;
   User.findOne({email:username}, function(err, foundUser){
     if (!err) {
         if(foundUser){
-          if(foundUser.password === password){
-            res.render("secrets");
-          }
+          bcrypt.compare(password, foundUser.password, function (err, result) {
+            // result == true
+
+            if(result===true){
+              res.render("secrets")
+            }
+          });
         }
     } else {
       console.log(err);
