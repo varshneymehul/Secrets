@@ -11,6 +11,7 @@ const session = require("express-session");
 const passport = require('passport');
 const passportLocalMongoose = require('passport-local-mongoose')
 const GoogleStrategy = require('passport-google-oauth2').Strategy;
+const FacebookStrategy = require('passport-facebook').Strategy;
 const findOrCreate = require("mongoose-findorcreate")
 
 const app = express();
@@ -51,6 +52,7 @@ const userSchema = new mongoose.Schema({
   email: String,
   password: String,
   googleId: String, // here we are also registering the google ID into our database to later verify if the user is already registered in the website or not and if he is then log them in
+  facebookId:String,
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -76,8 +78,8 @@ passport.deserializeUser(function (id, done) {
 
 // Put google strategy after session initialization and serialize and deserialize user
 passport.use(new GoogleStrategy({
-    clientID: process.env.CLIENT_ID,
-    clientSecret: process.env.CLIENT_SECRET,
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: "http://localhost:3000/auth/google/secrets",
     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
   },
@@ -87,6 +89,21 @@ passport.use(new GoogleStrategy({
       googleId: profile.id
     }, function (err, user) { // findOrCreate does not exist in official docs but we can make it work using another package called findOrCreate from NPM
       return done(err, user);
+    });
+  }
+));
+
+passport.use(new FacebookStrategy({
+    clientID: process.env.FACEBOOK_APP_ID,
+    clientSecret: process.env.FACEBOOK_APP_SECRET,
+    callbackURL: "http://localhost:3000/auth/facebook/secrets"
+  },
+  function (accessToken, refreshToken, profile, cb) {
+    console.log(profile);
+    User.findOrCreate({
+      facebookId: profile.id
+    }, function (err, user) {
+      return cb(err, user);
     });
   }
 ));
@@ -106,6 +123,17 @@ app.get("/auth/google/secrets", passport.authenticate('google', {
   successRedirect: '/secrets',
   failureRedirect: '/login',
 }))
+
+app.get('/auth/facebook',
+  passport.authenticate('facebook')
+);
+
+app.get('/auth/facebook/secrets',
+  passport.authenticate('facebook', {
+    successRedirect: '/secrets',
+    failureRedirect: '/login'
+  }));
+
 app.get('/login', function (req, res) {
   res.render("login");
 });
