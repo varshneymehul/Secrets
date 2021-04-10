@@ -52,14 +52,14 @@ const userSchema = new mongoose.Schema({
   email: String,
   password: String,
   googleId: String, // here we are also registering the google ID into our database to later verify if the user is already registered in the website or not and if he is then log them in
-  facebookId:String,
+  facebookId: String,
+  secret: String,
 });
 
 userSchema.plugin(passportLocalMongoose);
 userSchema.plugin(findOrCreate);
 
 const User = mongoose.model("user", userSchema)
-
 // Using mongoose-encryption 
 // userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['password'] });
 
@@ -99,7 +99,6 @@ passport.use(new FacebookStrategy({
     callbackURL: "http://localhost:3000/auth/facebook/secrets"
   },
   function (accessToken, refreshToken, profile, cb) {
-    console.log(profile);
     User.findOrCreate({
       facebookId: profile.id
     }, function (err, user) {
@@ -113,6 +112,7 @@ app.use(express.static('public'));
 app.get('/', function (req, res) {
   res.render("home");
 });
+
 
 app.get("/auth/google",
   passport.authenticate('google', {
@@ -148,11 +148,51 @@ app.get('/logout', function (req, res) {
 
 app.get("/secrets", function (req, res) {
   if (req.isAuthenticated()) {
-    res.render('secrets');
+    User.find({
+      "secret": {
+        $ne: null
+      }
+    }, function (err, foundUsers) {
+      if (!err) {
+        if (foundUsers) {
+          res.render("secrets", {
+            usersWithSecrets: foundUsers
+          });
+        }
+      } else {
+        console.log(err);
+      }
+    })
   } else {
     res.redirect("/login");
   }
 });
+app.get("/submit", function (req, res) {
+
+  if (req.isAuthenticated()) {
+    res.render('submit');
+  } else {
+    res.redirect("/login");
+  }
+})
+
+app.post("/submit", function (req, res) {
+  const submittedSecret = req.body.secret;
+  User.findById({
+    _id: req.user.id
+  }, function (err, foundUser) {
+    if (!err) {
+      if (foundUser) {
+        foundUser.secret = submittedSecret;
+        foundUser.save(function () {
+          res.redirect("/secrets")
+        })
+      }
+    } else {
+      console.log(err);
+    }
+  })
+})
 
 app.post("/register", function (req, res) {
 

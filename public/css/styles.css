@@ -1,16 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=Mali:wght@500&family=Work+Sans:wght@400;600&display=swap');
 
 body {
   background-color: #E8ECEF;
-}
-
-.centered {
-    padding-top: 200px;
-    text-align: center;
 }
 
 .secret-text {
   text-align: center;
   font-size: 2rem;
   color: #fff;
-  background-color: #000;
+  font-family: 'Mali';
+}
+
+.display-3 {
+  color: white;
+  font-family: 'Work Sans';
+}
+
+.centered {
+  padding-top: 200px;
+  text-align: center;
+}
+
+.hero{
+  padding:10% 2% 0 2%;
+}
+
+.fas{
+  color: #fff;
 }
