@@ -42,8 +42,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 mongoose.connect(
-  "mongodb+srv://admin:admin@secrets-app.27i09.mongodb.net/userDB?retryWrites=true&w=majority",
-  {
+process.ENV.DB_LINK,  {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   }
