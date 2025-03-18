@@ -1,54 +1,44 @@
 // require dotenv as soon as possible
-require('dotenv').config();
-
-const express = require('express');
-const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
-const _ = require('lodash');
+require("dotenv").config();
+const express = require("express");
+const bodyParser = require("body-parser");
+const mongoose = require("mongoose");
+const _ = require("lodash");
 
 //These configuration should be done strictly in this order only
 const session = require("express-session");
-const passport = require('passport');
-const passportLocalMongoose = require('passport-local-mongoose')
-const GoogleStrategy = require('passport-google-oauth2').Strategy;
-const FacebookStrategy = require('passport-facebook').Strategy;
-const findOrCreate = require("mongoose-findorcreate")
+const passport = require("passport");
+const passportLocalMongoose = require("passport-local-mongoose");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+// const FacebookStrategy = require("passport-facebook").Strategy;
+const findOrCreate = require("mongoose-findorcreate");
 
 const app = express();
 
-// const bcrypt = require('bcrypt')
-
-// brcrypt configuration
-// const saltRounds = 10;
-
-
 const port = 3000;
-app.set('view engine', 'ejs');
-// const md5 = require("md5")
-// const encrypt = require("mongoose-encryption")
-
-app.use(bodyParser.urlencoded({
-  extended: true
-}));
+app.set("view engine", "ejs");
+app.use(
+  bodyParser.urlencoded({
+    extended: true,
+  })
+);
 
 // Place app.use() for session beneath the app.use for other ones and before mongoose.connect
-app.use(session({
-  secret: 'asdf',
-  resave: false,
-  saveUninitialized: true,
-}))
+app.use(
+  session({
+    secret: "first secret",
+    resave: false,
+    saveUninitialized: true,
+  })
+);
 // Cookies are lost if server is restarted.
 app.use(passport.initialize());
 app.use(passport.session());
 
-mongoose.connect(
-process.ENV.DB_LINK,  {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  }
-);
-
-mongoose.set("useCreateIndex", true);
+mongoose
+  .connect(process.env.DB_LINK)
+  .then(() => console.log("Connected to MongoDB"))
+  .catch((err) => console.log("MongoDB connection error:", err));
 
 const userSchema = new mongoose.Schema({
   email: String,
@@ -61,229 +51,177 @@ const userSchema = new mongoose.Schema({
 userSchema.plugin(passportLocalMongoose);
 userSchema.plugin(findOrCreate);
 
-const User = mongoose.model("user", userSchema)
-// Using mongoose-encryption 
-// userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['password'] });
+const User = mongoose.model("user", userSchema);
 
 // Simplified Passport/Passport-Local Configuration
 passport.use(User.createStrategy());
 
 passport.serializeUser(function (user, done) {
-  done(null, user.id);
+  if (user && user.doc) {
+    // Google login returns user.doc
+    done(null, user.doc._id.toString());
+  } else if (user && user._id) {
+    // Local strategy returns user directly
+    done(null, user._id.toString());
+  } else {
+    done(new Error("Invalid user object"));
+  }
 });
-
 passport.deserializeUser(function (id, done) {
-  User.findById(id, function (err, user) {
-    done(err, user);
-  });
+  User.findById(id)
+    .then((user) => {
+      done(null, user);
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 });
 
 // Put google strategy after session initialization and serialize and deserialize user
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/google/secrets",
-    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
-  },
-  function (request, accessToken, refreshToken, profile, done) {
-    // console.log(profile);
-    User.findOrCreate({
-      googleId: profile.id
-    }, function (err, user) { // findOrCreate does not exist in official docs but we can make it work using another package called findOrCreate from NPM
-      return done(err, user);
-    });
-  }
-));
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: "http://localhost:3000/auth/google/secrets",
+      userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
+    },
+    function (request, accessToken, refreshToken, profile, done) {
+      // console.log(profile);
+      User.findOrCreate({
+        googleId: profile.id,
+      })
+        .then((user) => {
+          return done(null, user);
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    }
+  )
+);
 
-passport.use(new FacebookStrategy({
-    clientID: process.env.FACEBOOK_APP_ID,
-    clientSecret: process.env.FACEBOOK_APP_SECRET,
-    callbackURL: "http://localhost:3000/auth/facebook/secrets"
-  },
-  function (accessToken, refreshToken, profile, cb) {
-    User.findOrCreate({
-      facebookId: profile.id
-    }, function (err, user) {
-      return cb(err, user);
-    });
-  }
-));
+app.use(express.static("public"));
 
-app.use(express.static('public'));
-
-app.get('/', function (req, res) {
+app.get("/", function (req, res) {
   res.render("home");
 });
 
-
-app.get("/auth/google",
-  passport.authenticate('google', {
-    scope: ['profile']
+app.get(
+  "/auth/google",
+  passport.authenticate("google", {
+    scope: ["profile"],
   })
-)
-app.get("/auth/google/secrets", passport.authenticate('google', {
-  successRedirect: '/secrets',
-  failureRedirect: '/login',
-}))
-
-app.get('/auth/facebook',
-  passport.authenticate('facebook')
+);
+app.get(
+  "/auth/google/secrets",
+  passport.authenticate("google", {
+    successRedirect: "/secrets",
+    failureRedirect: "/login",
+  })
 );
 
-app.get('/auth/facebook/secrets',
-  passport.authenticate('facebook', {
-    successRedirect: '/secrets',
-    failureRedirect: '/login'
-  }));
-
-app.get('/login', function (req, res) {
+app.get("/login", function (req, res) {
   res.render("login");
 });
 
-app.get('/register', function (req, res) {
+app.get("/register", function (req, res) {
   res.render("register");
 });
-app.get('/logout', function (req, res) {
-  req.logout(); // this also comes from passport.js docs
-  res.redirect('/');
+app.get("/logout", function (req, res) {
+  req.logout(function (err) {
+    if (err) {
+      return next(err);
+    }
+    res.redirect("/");
+  });
 });
 
 app.get("/secrets", function (req, res) {
   if (req.isAuthenticated()) {
     User.find({
-      "secret": {
-        $ne: null
-      }
-    }, function (err, foundUsers) {
-      if (!err) {
+      secret: {
+        $ne: null,
+      },
+    })
+      .then(function (foundUsers) {
         if (foundUsers) {
           res.render("secrets", {
-            usersWithSecrets: foundUsers
+            usersWithSecrets: foundUsers,
           });
         }
-      } else {
+      })
+      .catch(function (err) {
         console.log(err);
-      }
-    })
+      });
   } else {
     res.redirect("/login");
   }
 });
 app.get("/submit", function (req, res) {
-
   if (req.isAuthenticated()) {
-    res.render('submit');
+    res.render("submit");
   } else {
     res.redirect("/login");
   }
-})
+});
 
 app.post("/submit", function (req, res) {
   const submittedSecret = req.body.secret;
   User.findById({
-    _id: req.user.id
-  }, function (err, foundUser) {
-    if (!err) {
+    _id: req.user._id,
+  })
+    .then(function (foundUser) {
       if (foundUser) {
         foundUser.secret = submittedSecret;
-        foundUser.save(function () {
-          res.redirect("/secrets")
-        })
+        foundUser.save().then(() => {
+          res.redirect("/secrets");
+        });
       }
-    } else {
+    })
+    .catch(function (err) {
       console.log(err);
-    }
-  })
-})
+      res.redirect("/register");
+    });
+});
 
 app.post("/register", function (req, res) {
-
-  User.register({
-    username: req.body.username
-  }, req.body.password, function (err, user) {
-    if (!err) {
-      console.log('Successfully registered the user.');
+  User.register(
+    {
+      username: req.body.username,
+    },
+    req.body.password
+  )
+    .then(function (user) {
+      console.log("Successfully registered the user.");
       passport.authenticate("local")(req, res, function () {
-        res.redirect("/secrets")
-      })
-    } else {
+        res.redirect("/secrets");
+      });
+    })
+    .catch(function (err) {
       console.log(err);
-      res.redirect("/register")
-    }
-  })
-
-  /*
-  Using bcrypt
-
-  bcrypt.hash(req.body.password, saltRounds, function(err, hash){
-    const newUser = new User({
-      email: req.body.username,
-      password: hash,
+      res.redirect("/register");
     });
-    newUser.save(function (err) {
-      if (!err) {
-        console.log('Successfully registered the user.')
-        res.render("secrets")
-      } else {
-        console.log(err);
-      }
-    });
-
-  })*/
-
 });
 
 app.post("/login", function (req, res) {
-
   const user = new User({
     username: req.body.username,
     password: req.body.password,
-  })
+  });
 
   req.login(user, function (err) {
     if (!err) {
-      console.log('Successfully logged in');
+      console.log("Successfully logged in");
       passport.authenticate("local")(req, res, function () {
-        res.redirect("/secrets")
-      })
+        res.redirect("/secrets");
+      });
     } else {
       console.log(err);
     }
-  }) // this method comes from passport documentation
-
-  /*
-  Using bcrypt
-  
-  const username = req.body.username;
-  const password = req.body.password;
-  User.findOne({email:username}, function(err, foundUser){
-    if (!err) {
-        if(foundUser){
-          bcrypt.compare(password, foundUser.password, function (err, result) {
-            // result == true
-
-            if(result===true){
-              res.render("secrets")
-            }
-          });
-        }
-    } else {
-      console.log(err);
-    }
-  });
-  */
+  }); // this method comes from passport documentation
 });
 
 app.listen(port, function () {
-  console.log('Example app listening on port')
-})
-
-/*
-Using md5 function only
-
-const newUser = new User({
-  email: req.body.username,
-  password: md5(req.body.password),
+  console.log("Example app listening on port");
 });
-
-*/
